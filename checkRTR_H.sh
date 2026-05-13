@@ -54,9 +54,9 @@ check_sudoers_user() {
     echo "нет"
 }
 
-while IFS=: read -r USERNAME PASSWORD UID GID COMMENT HOME SHELL; do
-    if [ "$UID" -ge 1000 ] && [ "$UID" -lt 65534 ]; then
+while IFS=: read -r USERNAME PASSWORD USER_ID GROUP_ID COMMENT HOME_DIR USER_SHELL; do
+    if [ "$USER_ID" -ge 1000 ] && [ "$USER_ID" -lt 65534 ]; then
         SUDOERS_STATUS=$(check_sudoers_user "$USERNAME")
-        printf "%-25s %-10s %-10s %-10s\n" "$USERNAME" "$UID" "$GID" "$SUDOERS_STATUS"
+        printf "%-25s %-10s %-10s %-10s\n" "$USERNAME" "$USER_ID" "$GROUP_ID" "$SUDOERS_STATUS"
     fi
 done < /etc/passwd
