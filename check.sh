@@ -1,13 +1,11 @@
 #!/bin/bash
 
-echo "Проверка подключения к интернету..."
 
 # Проверяем интернет через ping до DNS Google
-if ping -c 4 ya.ru > /dev/null 2>&1; then
-    echo "Интернет работает"
-else
-    echo "Интернет не работает"
-fi
+echo "Проверка интернета через ping до ya.ru"
+echo
+
+ping -c 4 ya.ru
 
 echo
 echo "Сетевые интерфейсы и IP-адреса:"
