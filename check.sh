@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "Имя устройства:"
+hostname
+echo
 
 # Проверяем интернет через ping до DNS Google
 echo "Проверка интернета через ping до ya.ru"
