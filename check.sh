@@ -245,7 +245,6 @@ else
     else
         echo "systemctl не найден. Невозможно проверить службу FRR."
     fi
-    pause_script
     echo
     echo "=== Проверка демона ospfd ==="
     echo
@@ -270,11 +269,7 @@ else
     echo "=== Конфигурация OSPF ==="
     echo
 
-    ospf_config=$(vtysh -c "show running-config" 2>/dev/null | awk '
-        /^router ospf/ {show=1}
-        show==1 {print}
-        show==1 && /^!/ {show=0}
-    ')
+    ospf_config=$(vtysh -c "show running-config" 2>/dev/null)
 
     if [ -n "$ospf_config" ]; then
         echo "$ospf_config"
