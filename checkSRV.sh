@@ -1,5 +1,13 @@
 #!/bin/bash
 
+pause_script() {
+    echo
+    read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..."
+    echo
+    echo
+}
+
+
 echo "Имя устройства:"
 hostname
 echo
@@ -131,10 +139,3 @@ else
     echo "Файл /etc/selinux/config не найден"
 fi
 
-
-pause_script() {
-    echo
-    read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..."
-    echo
-    echo
-}
