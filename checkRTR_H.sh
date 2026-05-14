@@ -39,36 +39,40 @@ $3 >= 1000 && $3 < 65534 {
 ' /etc/passwd
 
 echo
-echo "=== Проверка пользователей в sudoers ==="
+echo "=== Строки sudoers для пользователей ==="
 echo
 
-printf "%-25s %-10s %-10s %-10s\n" "Пользователь" "UID" "GID" "SUDOERS"
-printf "%-25s %-10s %-10s %-10s\n" "------------" "---" "---" "-------"
+printf "%-25s %-10s %-10s %s\n" "Пользователь" "UID" "GID" "Строка sudoers"
+printf "%-25s %-10s %-10s %s\n" "------------" "---" "---" "--------------"
 
-check_sudoers_user() {
+get_sudoers_line() {
     local checked_user
     checked_user="$1"
 
-    if [ -r /etc/sudoers ]; then
-        if grep -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers 2>/dev/null | grep -vE "^[[:space:]]*#" > /dev/null 2>&1; then
-            echo "да"
-            return
-        fi
-    fi
+    local result
 
-    if [ -d /etc/sudoers.d ]; then
-        if grep -R -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers.d/ 2>/dev/null | grep -vE "^[[:space:]]*#" > /dev/null 2>&1; then
-            echo "да"
-            return
-        fi
-    fi
+    result=$(
+        {
+            if [ -r /etc/sudoers ]; then
+                grep -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers 2>/dev/null
+            fi
 
-    echo "нет"
+            if [ -d /etc/sudoers.d ]; then
+                grep -R -h -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers.d/ 2>/dev/null
+            fi
+        } | grep -vE "^[[:space:]]*#" | head -n 1
+    )
+
+    if [ -n "$result" ]; then
+        echo "$result"
+    else
+        echo "строка не найдена"
+    fi
 }
 
 while IFS=: read -r login_name passwd_field user_id group_id user_comment home_dir user_shell; do
     if [ "$user_id" -ge 1000 ] && [ "$user_id" -lt 65534 ]; then
-        sudoers_status=$(check_sudoers_user "$login_name")
-        printf "%-25s %-10s %-10s %-10s\n" "$login_name" "$user_id" "$group_id" "$sudoers_status"
+        sudoers_line=$(get_sudoers_line "$login_name")
+        printf "%-25s %-10s %-10s %s\n" "$login_name" "$user_id" "$group_id" "$sudoers_line"
     fi
 done < /etc/passwd
