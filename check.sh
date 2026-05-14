@@ -341,13 +341,13 @@ else
     if [ -n "$dhcp_config" ]; then
         echo "Файл конфигурации: $dhcp_config"
         echo
-        echo "----- НАЧАЛО ФАЙЛА dhcpd.conf -----"
+        echo "-----------------------------------"
         echo
 
         cat "$dhcp_config"
 
         echo
-        echo "----- КОНЕЦ ФАЙЛА dhcpd.conf -----"
+        echo "-----------------------------------"
     else
         echo "Файл dhcpd.conf не найден."
         echo "Проверялись:"
