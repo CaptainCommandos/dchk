@@ -245,7 +245,7 @@ else
     else
         echo "systemctl не найден. Невозможно проверить службу FRR."
     fi
- pause_script
+    pause_script
     echo
     echo "=== Проверка демона ospfd ==="
     echo
@@ -265,7 +265,7 @@ else
         echo "Проверка OSPF завершена."
         return 2>/dev/null || true
     fi
-
+    pause_script
     echo
     echo "=== Конфигурация OSPF ==="
     echo
@@ -281,7 +281,7 @@ else
     else
         echo "Конфигурация router ospf не найдена."
     fi
-pause_script
+    pause_script
     echo
     echo "=== Интерфейсы OSPF ==="
     echo
@@ -293,7 +293,7 @@ pause_script
     else
         echo "Интерфейсы OSPF не найдены или OSPF не настроен."
     fi
-pause_script
+    pause_script
     echo
     echo "=== Соседи OSPF ==="
     echo
@@ -305,7 +305,7 @@ pause_script
     else
         echo "OSPF-соседи не найдены."
     fi
-pause_script
+    pause_script
     echo
     echo "=== Маршруты OSPF ==="
     echo
