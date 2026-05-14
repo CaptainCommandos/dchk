@@ -76,3 +76,61 @@ while IFS=: read -r login_name passwd_field user_id group_id user_comment home_d
         printf "%-25s %-10s %-10s %s\n" "$login_name" "$user_id" "$group_id" "$sudoers_line"
     fi
 done < /etc/passwd
+
+echo
+echo "=== Параметры SSH ==="
+echo
+
+if command -v sshd >/dev/null 2>&1; then
+
+    ssh_config=$(sshd -T 2>/dev/null)
+
+    if [ -n "$ssh_config" ]; then
+
+        ssh_port=$(echo "$ssh_config" | awk '$1 == "port" {print $2}')
+        ssh_banner=$(echo "$ssh_config" | awk '$1 == "banner" {print $2}')
+        ssh_allow_users=$(echo "$ssh_config" | awk '$1 == "allowusers" {$1=""; sub(/^ /, ""); print}')
+
+        echo "Порт SSH: ${ssh_port:-не найден}"
+
+        if [ -n "$ssh_banner" ] && [ "$ssh_banner" != "none" ]; then
+            echo "Баннер SSH: есть"
+            echo "Файл баннера: $ssh_banner"
+        else
+            echo "Баннер SSH: не задан"
+        fi
+
+        if [ -n "$ssh_allow_users" ]; then
+            echo "AllowUsers: задан"
+            echo "Значение AllowUsers: $ssh_allow_users"
+        else
+            echo "AllowUsers: не задан"
+        fi
+
+    else
+        echo "Не удалось получить параметры sshd."
+        echo "Попробуйте запустить скрипт через sudo:"
+        echo "sudo bash $0"
+    fi
+
+else
+    echo "sshd не найден. Возможно, OpenSSH Server не установлен."
+fi
+
+echo
+echo "=== SELinux ==="
+echo
+
+if command -v getenforce >/dev/null 2>&1; then
+    selinux_mode=$(getenforce)
+    echo "Текущий режим SELinux: $selinux_mode"
+else
+    echo "getenforce не найден. Возможно, SELinux не установлен или отключён."
+fi
+
+if [ -f /etc/selinux/config ]; then
+    selinux_config_mode=$(grep -E '^SELINUX=' /etc/selinux/config | cut -d= -f2)
+    echo "Режим SELinux в конфигурации: ${selinux_config_mode:-не найден}"
+else
+    echo "Файл /etc/selinux/config не найден"
+fi
