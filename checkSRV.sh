@@ -4,14 +4,6 @@ echo "Имя устройства:"
 hostname
 echo
 
-echo "Полное имя устройства:"
-full_name=$(hostname -f 2>/dev/null)
-
-if [ -n "$full_name" ]; then
-    echo "$full_name"
-else
-    echo "$(hostname) — полное доменное имя не задано"
-fi
 
 echo
 echo "Проверка интернета через ping до ya.ru"
@@ -24,6 +16,8 @@ echo "Сетевые интерфейсы и IP-адреса:"
 echo
 
 ip -o -4 addr show | awk '{print "Интерфейс: " $2 "\nIP-адрес/маска: " $4 "\n"}'
+
+pause_script
 
 echo
 echo "=== Созданные пользователи на устройстве ==="
@@ -76,6 +70,8 @@ while IFS=: read -r login_name passwd_field user_id group_id user_comment home_d
         printf "%-25s %-10s %-10s %s\n" "$login_name" "$user_id" "$group_id" "$sudoers_line"
     fi
 done < /etc/passwd
+
+pause_script
 
 echo
 echo "=== Параметры SSH ==="
@@ -134,3 +130,11 @@ if [ -f /etc/selinux/config ]; then
 else
     echo "Файл /etc/selinux/config не найден"
 fi
+
+
+pause_script() {
+    echo
+    read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..."
+    echo
+    echo
+}
