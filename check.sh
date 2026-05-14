@@ -357,7 +357,8 @@ else
 fi
 
 pause_script
-pause_script
+
+#DNS
 
 echo
 echo "=== Проверка DNS-сервера BIND ==="
@@ -436,6 +437,7 @@ else
 
         if command -v named-checkconf >/dev/null 2>&1; then
             echo "Проверка синтаксиса named.conf:"
+
             if named-checkconf "$dns_config" >/dev/null 2>&1; then
                 echo "Синтаксис конфигурации: ошибок не найдено"
             else
@@ -451,6 +453,7 @@ else
         echo
 
         temp_dns_file=$(mktemp)
+        temp_zones_file=$(mktemp)
 
         {
             cat "$dns_config" 2>/dev/null
@@ -468,30 +471,69 @@ else
             done
         } > "$temp_dns_file"
 
-        zone_count=$(awk '
+        awk '
+            function is_standard_zone(name, file) {
+                if (name == ".") return 1
+                if (name == "localhost") return 1
+                if (name == "localhost.localdomain") return 1
+                if (name == "localdomain") return 1
+
+                if (name == "0.0.127.in-addr.arpa") return 1
+                if (name == "1.0.0.127.in-addr.arpa") return 1
+                if (name == "127.in-addr.arpa") return 1
+                if (name == "0.in-addr.arpa") return 1
+                if (name == "255.in-addr.arpa") return 1
+
+                if (name == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa") return 1
+
+                if (file == "named.localhost") return 1
+                if (file == "named.loopback") return 1
+                if (file == "named.empty") return 1
+
+                return 0
+            }
+
             /^[[:space:]]*zone[[:space:]]+"/ {
+                in_zone=1
+                zone_block=$0 "\n"
+
                 zone_name=$0
                 gsub(/^[[:space:]]*zone[[:space:]]+"/, "", zone_name)
                 gsub(/".*/, "", zone_name)
 
-                if (
-                    zone_name != "." &&
-                    zone_name != "localhost" &&
-                    zone_name != "localhost.localdomain" &&
-                    zone_name != "localdomain" &&
-                    zone_name != "0.0.127.in-addr.arpa" &&
-                    zone_name != "127.in-addr.arpa" &&
-                    zone_name != "0.in-addr.arpa" &&
-                    zone_name != "255.in-addr.arpa"
-                ) {
-                    count++
-                }
+                zone_file=""
+                next
             }
 
-            END {
-                print count + 0
+            in_zone == 1 {
+                zone_block = zone_block $0 "\n"
+
+                if ($0 ~ /^[[:space:]]*file[[:space:]]+"/) {
+                    zone_file=$0
+                    gsub(/^[[:space:]]*file[[:space:]]*"/, "", zone_file)
+                    gsub(/".*/, "", zone_file)
+                }
+
+                if ($0 ~ /^[[:space:]]*};/) {
+                    if (is_standard_zone(zone_name, zone_file) == 0) {
+                        print "###ZONE_START###"
+                        print "ZONE_NAME=" zone_name
+                        print "ZONE_FILE=" zone_file
+                        print "ZONE_BLOCK_START"
+                        printf "%s", zone_block
+                        print "ZONE_BLOCK_END"
+                        print "###ZONE_END###"
+                    }
+
+                    in_zone=0
+                    zone_name=""
+                    zone_file=""
+                    zone_block=""
+                }
             }
-        ' "$temp_dns_file")
+        ' "$temp_dns_file" > "$temp_zones_file"
+
+        zone_count=$(grep -c '^###ZONE_START###' "$temp_zones_file")
 
         if [ "$zone_count" -eq 0 ]; then
             echo "Пользовательские DNS-зоны не найдены."
@@ -499,68 +541,117 @@ else
             echo "Найдено пользовательских зон: $zone_count"
             echo
 
-            awk '
-                /^[[:space:]]*zone[[:space:]]+"/ {
-                    in_zone=1
-                    skip_zone=0
+            current_zone_number=0
 
-                    zone_name=$0
-                    gsub(/^[[:space:]]*zone[[:space:]]+"/, "", zone_name)
-                    gsub(/".*/, "", zone_name)
+            while IFS= read -r line; do
+                if [ "$line" = "###ZONE_START###" ]; then
+                    zone_name=""
+                    zone_file=""
+                    zone_block=""
+                    in_zone_block=0
+                    continue
+                fi
 
-                    if (
-                        zone_name == "." ||
-                        zone_name == "localhost" ||
-                        zone_name == "localhost.localdomain" ||
-                        zone_name == "localdomain" ||
-                        zone_name == "0.0.127.in-addr.arpa" ||
-                        zone_name == "127.in-addr.arpa" ||
-                        zone_name == "0.in-addr.arpa" ||
-                        zone_name == "255.in-addr.arpa"
-                    ) {
-                        skip_zone=1
-                    }
+                if echo "$line" | grep -q '^ZONE_NAME='; then
+                    zone_name=$(echo "$line" | sed 's/^ZONE_NAME=//')
+                    continue
+                fi
 
-                    zone_type="прямая"
-                    if (zone_name ~ /in-addr\.arpa$/ || zone_name ~ /ip6\.arpa$/) {
-                        zone_type="обратная"
-                    }
+                if echo "$line" | grep -q '^ZONE_FILE='; then
+                    zone_file=$(echo "$line" | sed 's/^ZONE_FILE=//')
+                    continue
+                fi
 
-                    if (skip_zone == 0) {
-                        print "Зона: " zone_name
-                        print "Тип зоны: " zone_type
-                        print "Параметры зоны:"
-                        print $0
-                    }
+                if [ "$line" = "ZONE_BLOCK_START" ]; then
+                    in_zone_block=1
+                    continue
+                fi
 
-                    next
-                }
+                if [ "$line" = "ZONE_BLOCK_END" ]; then
+                    in_zone_block=0
+                    continue
+                fi
 
-                in_zone==1 {
-                    if (skip_zone == 0) {
-                        print $0
-                    }
+                if [ "$line" = "###ZONE_END###" ]; then
+                    current_zone_number=$((current_zone_number + 1))
 
-                    if ($0 ~ /^[[:space:]]*};/) {
-                        if (skip_zone == 0) {
-                            print "----------------------------------------"
-                            print ""
-                        }
+                    echo
+                    echo "========================================"
+                    echo "Зона $current_zone_number из $zone_count"
+                    echo "========================================"
+                    echo
 
-                        in_zone=0
-                        skip_zone=0
-                    }
-                }
-            ' "$temp_dns_file"
+                    echo "Зона: $zone_name"
+
+                    if echo "$zone_name" | grep -qE 'in-addr\.arpa$|ip6\.arpa$'; then
+                        echo "Тип зоны: обратная"
+                    else
+                        echo "Тип зоны: прямая"
+                    fi
+
+                    echo "Файл зоны: ${zone_file:-не указан}"
+                    echo
+
+                    echo "=== Параметры зоны из named.conf ==="
+                    echo
+                    printf "%b" "$zone_block"
+
+                    echo
+                    echo "=== Внутренние записи зоны ==="
+                    echo
+
+                    full_zone_path=""
+
+                    if [ -n "$zone_file" ]; then
+                        if [[ "$zone_file" = /* ]]; then
+                            full_zone_path="$zone_file"
+                        else
+                            if [ -d /var/named ]; then
+                                full_zone_path="/var/named/$zone_file"
+                            elif [ -d /var/cache/bind ]; then
+                                full_zone_path="/var/cache/bind/$zone_file"
+                            else
+                                full_zone_path="$zone_file"
+                            fi
+                        fi
+                    fi
+
+                    if [ -n "$full_zone_path" ] && [ -f "$full_zone_path" ]; then
+                        echo "Путь к файлу зоны: $full_zone_path"
+                        echo
+                        echo "----- НАЧАЛО ЗАПИСЕЙ ЗОНЫ -----"
+                        echo
+
+                        grep -vE '^[[:space:]]*$' "$full_zone_path" | grep -vE '^[[:space:]]*;'
+
+                        echo
+                        echo "----- КОНЕЦ ЗАПИСЕЙ ЗОНЫ -----"
+
+                        if command -v named-checkzone >/dev/null 2>&1; then
+                            echo
+                            echo "Проверка зоны:"
+                            named-checkzone "$zone_name" "$full_zone_path" 2>&1
+                        fi
+                    else
+                        echo "Файл зоны не найден или не указан."
+                    fi
+
+                    echo
+                    pause_script
+                    continue
+                fi
+
+                if [ "$in_zone_block" -eq 1 ]; then
+                    zone_block="${zone_block}${line}\n"
+                fi
+
+            done < "$temp_zones_file"
         fi
 
-        rm -f "$temp_dns_file"
+        rm -f "$temp_dns_file" "$temp_zones_file"
     fi
 
     echo
     echo "Проверка DNS завершена."
 fi
-
-
-
 
