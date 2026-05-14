@@ -54,11 +54,11 @@ get_sudoers_line() {
     result=$(
         {
             if [ -r /etc/sudoers ]; then
-                grep -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers 2>/dev/null
+                grep -E "^[[:space:]]*${checked_user}[[:space:]]+" /etc/sudoers 2>/dev/null
             fi
 
             if [ -d /etc/sudoers.d ]; then
-                grep -R -h -E "^[[:space:]]*$checked_user[[:space:]]+" /etc/sudoers.d/ 2>/dev/null
+                grep -R -h -E "^[[:space:]]*${checked_user}[[:space:]]+" /etc/sudoers.d/ 2>/dev/null
             fi
         } | grep -vE "^[[:space:]]*#" | head -n 1
     )
