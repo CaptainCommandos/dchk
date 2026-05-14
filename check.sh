@@ -283,18 +283,6 @@ else
     fi
     pause_script
     echo
-    echo "=== Интерфейсы OSPF ==="
-    echo
-
-    ospf_interface=$(vtysh -c "show ip ospf interface" 2>/dev/null)
-
-    if [ -n "$ospf_interface" ]; then
-        echo "$ospf_interface"
-    else
-        echo "Интерфейсы OSPF не найдены или OSPF не настроен."
-    fi
-    pause_script
-    echo
     echo "=== Соседи OSPF ==="
     echo
 
