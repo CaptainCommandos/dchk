@@ -219,3 +219,107 @@ else
     echo "Команда ip не найдена."
 fi
 
+
+pause_script
+
+echo
+echo "=== Проверка FRR OSPF ==="
+echo
+
+if ! command -v vtysh >/dev/null 2>&1; then
+    echo "FRR: не установлен"
+    echo "Проверка FRR OSPF завершена."
+else
+    echo "FRR: установлен"
+    echo
+
+    echo "=== Состояние службы FRR ==="
+    echo
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl is-active --quiet frr; then
+            echo "Служба FRR: работает"
+        else
+            echo "Служба FRR: не работает"
+        fi
+    else
+        echo "systemctl не найден. Невозможно проверить службу FRR."
+    fi
+
+    echo
+    echo "=== Проверка демона ospfd ==="
+    echo
+
+    if [ -f /etc/frr/daemons ]; then
+        ospfd_status=$(grep -E '^ospfd=' /etc/frr/daemons | cut -d= -f2)
+
+        if [ "$ospfd_status" = "yes" ]; then
+            echo "ospfd: включен"
+        else
+            echo "ospfd: не включен"
+            echo "Проверка OSPF завершена."
+            return 2>/dev/null || true
+        fi
+    else
+        echo "Файл /etc/frr/daemons не найден"
+        echo "Проверка OSPF завершена."
+        return 2>/dev/null || true
+    fi
+
+    echo
+    echo "=== Конфигурация OSPF ==="
+    echo
+
+    ospf_config=$(vtysh -c "show running-config" 2>/dev/null | awk '
+        /^router ospf/ {show=1}
+        show==1 {print}
+        show==1 && /^!/ {show=0}
+    ')
+
+    if [ -n "$ospf_config" ]; then
+        echo "$ospf_config"
+    else
+        echo "Конфигурация router ospf не найдена."
+    fi
+
+    echo
+    echo "=== Интерфейсы OSPF ==="
+    echo
+
+    ospf_interface=$(vtysh -c "show ip ospf interface" 2>/dev/null)
+
+    if [ -n "$ospf_interface" ]; then
+        echo "$ospf_interface"
+    else
+        echo "Интерфейсы OSPF не найдены или OSPF не настроен."
+    fi
+
+    echo
+    echo "=== Соседи OSPF ==="
+    echo
+
+    ospf_neighbors=$(vtysh -c "show ip ospf neighbor" 2>/dev/null)
+
+    if [ -n "$ospf_neighbors" ]; then
+        echo "$ospf_neighbors"
+    else
+        echo "OSPF-соседи не найдены."
+    fi
+
+    echo
+    echo "=== Маршруты OSPF ==="
+    echo
+
+    ospf_routes=$(vtysh -c "show ip route ospf" 2>/dev/null)
+
+    if [ -n "$ospf_routes" ]; then
+        echo "$ospf_routes"
+    else
+        echo "OSPF-маршруты не найдены."
+    fi
+
+
+fi
+
+
+
