@@ -139,3 +139,84 @@ else
     echo "Файл /etc/selinux/config не найден"
 fi
 
+pause_script
+
+echo
+echo "=== Информация о туннелях IPv4 ==="
+echo
+
+if command -v ip >/dev/null 2>&1; then
+
+    tunnel_list=$(ip tunnel show 2>/dev/null)
+
+    if [ -n "$tunnel_list" ]; then
+
+        echo "$tunnel_list" | while IFS= read -r tunnel_line; do
+
+            tunnel_name=$(echo "$tunnel_line" | awk -F: '{print $1}')
+            tunnel_params=$(echo "$tunnel_line" | cut -d: -f2-)
+
+            tunnel_mode=$(echo "$tunnel_params" | awk '
+                {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i == "mode") {
+                            print $(i+1)
+                            exit
+                        }
+                    }
+                }
+            ')
+
+            tunnel_parent=$(echo "$tunnel_params" | awk '
+                {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i == "dev") {
+                            print $(i+1)
+                            exit
+                        }
+                    }
+                }
+            ')
+
+            tunnel_local=$(echo "$tunnel_params" | awk '
+                {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i == "local") {
+                            print $(i+1)
+                            exit
+                        }
+                    }
+                }
+            ')
+
+            tunnel_remote=$(echo "$tunnel_params" | awk '
+                {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i == "remote") {
+                            print $(i+1)
+                            exit
+                        }
+                    }
+                }
+            ')
+
+            tunnel_ipv4=$(ip -o -4 addr show dev "$tunnel_name" 2>/dev/null | awk '{print $4}' | paste -sd ", " -)
+
+            echo "Туннель: $tunnel_name"
+            echo "Режим: ${tunnel_mode:-не найден}"
+            echo "Родительский интерфейс: ${tunnel_parent:-не указан}"
+            echo "Локальный IP: ${tunnel_local:-не указан}"
+            echo "Удаленный IP: ${tunnel_remote:-не указан}"
+            echo "Конфигурация IPv4: ${tunnel_ipv4:-IPv4-адрес не назначен}"
+            echo
+
+        done
+
+    else
+        echo "IPv4-туннели не найдены."
+    fi
+
+else
+    echo "Команда ip не найдена."
+fi
+
