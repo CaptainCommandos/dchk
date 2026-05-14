@@ -659,8 +659,6 @@ else
 
         rm -f "$temp_dns_file" "$temp_zones_file"
     fi
-
-    echo
-    echo "Проверка DNS завершена."
+    
 fi
 
