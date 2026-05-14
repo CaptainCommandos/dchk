@@ -301,8 +301,51 @@ else
         echo "OSPF-маршруты не найдены."
     fi
 
-
 fi
+
+pause_script
+echo
+echo "=== Проверка DHCP-сервера ==="
+echo
+
+dhcp_installed=0
+
+if command -v dhcpd >/dev/null 2>&1; then
+    dhcp_installed=1
+fi
+
+if rpm -q dhcp-server >/dev/null 2>&1; then
+    dhcp_installed=1
+fi
+
+if [ "$dhcp_installed" -eq 0 ]; then
+    echo "DHCP-сервер: не установлен"
+else
+    echo "DHCP-сервер: установлен"
+    echo
+    echo
+    echo "=== Файл dhcpd.conf ==="
+    echo
+
+    dhcp_config=""
+
+    if [ -f /etc/dhcp/dhcpd.conf ]; then
+        dhcp_config="/etc/dhcp/dhcpd.conf"
+    elif [ -f /etc/dhcpd.conf ]; then
+        dhcp_config="/etc/dhcpd.conf"
+    fi
+
+    if [ -n "$dhcp_config" ]; then
+        echo "Файл конфигурации: $dhcp_config"
+        cat "$dhcp_config"
+        echo
+    else
+        echo "Файл dhcpd.conf не найден."
+        echo "Проверялись:"
+        echo "/etc/dhcp/dhcpd.conf"
+        echo "/etc/dhcpd.conf"
+    fi
+
 
 
 
