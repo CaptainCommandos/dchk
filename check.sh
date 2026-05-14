@@ -636,6 +636,7 @@ else
                             echo
                             echo "Проверка зоны:"
                             named-checkzone "$zone_name" "$full_zone_path" 2>&1
+                            pause_script
                         fi
                     else
                         echo "Файл зоны не найден или не указан."
