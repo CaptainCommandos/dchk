@@ -203,7 +203,6 @@ if command -v ip >/dev/null 2>&1; then
             tunnel_ipv4=$(ip -o -4 addr show dev "$tunnel_name" 2>/dev/null | awk '{print $4}' | paste -sd ", " -)
 
             echo "Туннель: $tunnel_name"
-            echo "Режим: ${tunnel_mode:-не найден}"
             echo "Родительский интерфейс: ${tunnel_parent:-не указан}"
             echo "Локальный IP: ${tunnel_local:-не указан}"
             echo "Удаленный IP: ${tunnel_remote:-не указан}"
