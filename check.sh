@@ -357,6 +357,7 @@ else
 fi
 
 pause_script
+pause_script
 
 echo
 echo "=== Проверка DNS-сервера BIND ==="
@@ -467,40 +468,87 @@ else
             done
         } > "$temp_dns_file"
 
-        zone_count=$(grep -cE '^[[:space:]]*zone[[:space:]]+"' "$temp_dns_file")
+        zone_count=$(awk '
+            /^[[:space:]]*zone[[:space:]]+"/ {
+                zone_name=$0
+                gsub(/^[[:space:]]*zone[[:space:]]+"/, "", zone_name)
+                gsub(/".*/, "", zone_name)
+
+                if (
+                    zone_name != "." &&
+                    zone_name != "localhost" &&
+                    zone_name != "localhost.localdomain" &&
+                    zone_name != "localdomain" &&
+                    zone_name != "0.0.127.in-addr.arpa" &&
+                    zone_name != "127.in-addr.arpa" &&
+                    zone_name != "0.in-addr.arpa" &&
+                    zone_name != "255.in-addr.arpa"
+                ) {
+                    count++
+                }
+            }
+
+            END {
+                print count + 0
+            }
+        ' "$temp_dns_file")
 
         if [ "$zone_count" -eq 0 ]; then
-            echo "DNS-зоны не найдены."
+            echo "Пользовательские DNS-зоны не найдены."
         else
-            echo "Найдено зон: $zone_count"
+            echo "Найдено пользовательских зон: $zone_count"
             echo
 
             awk '
                 /^[[:space:]]*zone[[:space:]]+"/ {
                     in_zone=1
+                    skip_zone=0
+
                     zone_name=$0
                     gsub(/^[[:space:]]*zone[[:space:]]+"/, "", zone_name)
                     gsub(/".*/, "", zone_name)
+
+                    if (
+                        zone_name == "." ||
+                        zone_name == "localhost" ||
+                        zone_name == "localhost.localdomain" ||
+                        zone_name == "localdomain" ||
+                        zone_name == "0.0.127.in-addr.arpa" ||
+                        zone_name == "127.in-addr.arpa" ||
+                        zone_name == "0.in-addr.arpa" ||
+                        zone_name == "255.in-addr.arpa"
+                    ) {
+                        skip_zone=1
+                    }
 
                     zone_type="прямая"
                     if (zone_name ~ /in-addr\.arpa$/ || zone_name ~ /ip6\.arpa$/) {
                         zone_type="обратная"
                     }
 
-                    print "Зона: " zone_name
-                    print "Тип зоны: " zone_type
-                    print "Параметры зоны:"
-                    print $0
+                    if (skip_zone == 0) {
+                        print "Зона: " zone_name
+                        print "Тип зоны: " zone_type
+                        print "Параметры зоны:"
+                        print $0
+                    }
+
                     next
                 }
 
                 in_zone==1 {
-                    print $0
+                    if (skip_zone == 0) {
+                        print $0
+                    }
 
                     if ($0 ~ /^[[:space:]]*};/) {
-                        print "----------------------------------------"
-                        print ""
+                        if (skip_zone == 0) {
+                            print "----------------------------------------"
+                            print ""
+                        }
+
                         in_zone=0
+                        skip_zone=0
                     }
                 }
             ' "$temp_dns_file"
