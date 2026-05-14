@@ -356,6 +356,163 @@ else
     fi
 fi
 
+pause_script
+
+echo
+echo "=== Проверка DNS-сервера BIND ==="
+echo
+
+dns_installed=0
+
+if command -v named >/dev/null 2>&1; then
+    dns_installed=1
+fi
+
+if command -v named-checkconf >/dev/null 2>&1; then
+    dns_installed=1
+fi
+
+if command -v rpm >/dev/null 2>&1; then
+    if rpm -q bind >/dev/null 2>&1; then
+        dns_installed=1
+    fi
+fi
+
+if [ "$dns_installed" -eq 0 ]; then
+    echo "DNS-сервер BIND/named: не установлен"
+    echo "Проверка DNS завершена."
+else
+    echo "DNS-сервер BIND/named: установлен"
+    echo
+
+    echo "=== Состояние службы DNS ==="
+    echo
+
+    dns_service=""
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl list-unit-files 2>/dev/null | grep -q '^named\.service'; then
+            dns_service="named"
+        elif systemctl list-unit-files 2>/dev/null | grep -q '^bind\.service'; then
+            dns_service="bind"
+        elif systemctl list-unit-files 2>/dev/null | grep -q '^bind9\.service'; then
+            dns_service="bind9"
+        fi
+
+        if [ -n "$dns_service" ]; then
+            if systemctl is-active --quiet "$dns_service"; then
+                echo "Служба DNS: работает"
+            else
+                echo "Служба DNS: не работает"
+            fi
+        else
+            echo "Служба named/bind/bind9 не найдена в systemd."
+        fi
+    else
+        echo "systemctl не найден. Невозможно проверить службу DNS."
+    fi
+
+    echo
+    echo "=== Конфигурация DNS ==="
+    echo
+
+    dns_config=""
+
+    if [ -f /etc/named.conf ]; then
+        dns_config="/etc/named.conf"
+    elif [ -f /etc/bind/named.conf ]; then
+        dns_config="/etc/bind/named.conf"
+    fi
+
+    if [ -z "$dns_config" ]; then
+        echo "Основной файл named.conf не найден."
+        echo "Проверялись:"
+        echo "/etc/named.conf"
+        echo "/etc/bind/named.conf"
+    else
+        echo "Основной конфигурационный файл: $dns_config"
+        echo
+
+        if command -v named-checkconf >/dev/null 2>&1; then
+            echo "Проверка синтаксиса named.conf:"
+            if named-checkconf "$dns_config" >/dev/null 2>&1; then
+                echo "Синтаксис конфигурации: ошибок не найдено"
+            else
+                echo "Синтаксис конфигурации: есть ошибки"
+                named-checkconf "$dns_config" 2>&1
+            fi
+        else
+            echo "named-checkconf не найден. Проверка синтаксиса пропущена."
+        fi
+
+        echo
+        echo "=== DNS-зоны ==="
+        echo
+
+        temp_dns_file=$(mktemp)
+
+        {
+            cat "$dns_config" 2>/dev/null
+
+            grep -E '^[[:space:]]*include[[:space:]]+"' "$dns_config" 2>/dev/null | while IFS= read -r include_line; do
+                include_path=$(echo "$include_line" | sed -n 's/.*include[[:space:]]*"\([^"]*\)".*/\1/p')
+
+                if [ -n "$include_path" ]; then
+                    for included_file in $include_path; do
+                        if [ -f "$included_file" ]; then
+                            cat "$included_file" 2>/dev/null
+                        fi
+                    done
+                fi
+            done
+        } > "$temp_dns_file"
+
+        zone_count=$(grep -cE '^[[:space:]]*zone[[:space:]]+"' "$temp_dns_file")
+
+        if [ "$zone_count" -eq 0 ]; then
+            echo "DNS-зоны не найдены."
+        else
+            echo "Найдено зон: $zone_count"
+            echo
+
+            awk '
+                /^[[:space:]]*zone[[:space:]]+"/ {
+                    in_zone=1
+                    zone_name=$0
+                    gsub(/^[[:space:]]*zone[[:space:]]+"/, "", zone_name)
+                    gsub(/".*/, "", zone_name)
+
+                    zone_type="прямая"
+                    if (zone_name ~ /in-addr\.arpa$/ || zone_name ~ /ip6\.arpa$/) {
+                        zone_type="обратная"
+                    }
+
+                    print "Зона: " zone_name
+                    print "Тип зоны: " zone_type
+                    print "Параметры зоны:"
+                    print $0
+                    next
+                }
+
+                in_zone==1 {
+                    print $0
+
+                    if ($0 ~ /^[[:space:]]*};/) {
+                        print "----------------------------------------"
+                        print ""
+                        in_zone=0
+                    }
+                }
+            ' "$temp_dns_file"
+        fi
+
+        rm -f "$temp_dns_file"
+    fi
+
+    echo
+    echo "Проверка DNS завершена."
+fi
+
 
 
 
