@@ -2,11 +2,16 @@
 
 pause_script() {
     echo
-    read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..."
+
+    if [ -r /dev/tty ]; then
+        read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..." < /dev/tty
+    else
+        read -n 1 -s -r -p "Нажмите любую клавишу для продолжения..."
+    fi
+
     echo
     echo
 }
-
 
 echo "Имя устройства:"
 hostname
