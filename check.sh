@@ -86,6 +86,13 @@ done < /etc/passwd
 
 pause_script
 
+echo "Часовой пояс"
+timedatectl
+echo
+
+
+pause_script
+
 echo
 echo "=== Параметры SSH ==="
 echo
