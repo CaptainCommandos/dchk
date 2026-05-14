@@ -304,6 +304,7 @@ else
 fi
 
 pause_script
+
 echo
 echo "=== Проверка DHCP-сервера ==="
 echo
@@ -314,8 +315,10 @@ if command -v dhcpd >/dev/null 2>&1; then
     dhcp_installed=1
 fi
 
-if rpm -q dhcp-server >/dev/null 2>&1; then
-    dhcp_installed=1
+if command -v rpm >/dev/null 2>&1; then
+    if rpm -q dhcp-server >/dev/null 2>&1; then
+        dhcp_installed=1
+    fi
 fi
 
 if [ "$dhcp_installed" -eq 0 ]; then
@@ -323,7 +326,7 @@ if [ "$dhcp_installed" -eq 0 ]; then
 else
     echo "DHCP-сервер: установлен"
     echo
-    echo
+
     echo "=== Файл dhcpd.conf ==="
     echo
 
@@ -337,14 +340,21 @@ else
 
     if [ -n "$dhcp_config" ]; then
         echo "Файл конфигурации: $dhcp_config"
-        cat "$dhcp_config"
         echo
+        echo "----- НАЧАЛО ФАЙЛА dhcpd.conf -----"
+        echo
+
+        cat "$dhcp_config"
+
+        echo
+        echo "----- КОНЕЦ ФАЙЛА dhcpd.conf -----"
     else
         echo "Файл dhcpd.conf не найден."
         echo "Проверялись:"
         echo "/etc/dhcp/dhcpd.conf"
         echo "/etc/dhcpd.conf"
     fi
+fi
 
 
 
