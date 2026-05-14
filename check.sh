@@ -641,10 +641,6 @@ else
                     else
                         echo "Файл зоны не найден или не указан."
                     fi
-
-                    echo
-                    pause_script
-                    continue
                 fi
 
                 if [ "$in_zone_block" -eq 1 ]; then
