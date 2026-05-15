@@ -112,6 +112,7 @@ if command -v sshd >/dev/null 2>&1; then
         if [ -n "$ssh_banner" ] && [ "$ssh_banner" != "none" ]; then
             echo "Баннер SSH: есть"
             echo "Файл баннера: $ssh_banner"
+            cat $ssh_banner
         else
             echo "Баннер SSH: не задан"
         fi
