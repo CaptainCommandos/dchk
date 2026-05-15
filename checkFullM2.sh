@@ -13,27 +13,22 @@ pause_script() {
     echo
 }
 
-
 echo
-echo "=== Проверка настройки домена ==="
-echo
-
-
-echo "=== Имя домена ==="
+echo "=== Проверка домена ==="
 echo
 
 domain_name=""
 
-if command -v realm >/dev/null 2>&1; then
+if command -v samba-tool >/dev/null 2>&1; then
+    domain_name=$(samba-tool domain info 127.0.0.1 2>/dev/null | awk -F: '/Domain/ {gsub(/^[ \t]+/, "", $2); print $2; exit}')
+fi
+
+if [ -z "$domain_name" ] && command -v realm >/dev/null 2>&1; then
     domain_name=$(realm list 2>/dev/null | awk -F: '/realm-name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}')
 fi
 
 if [ -z "$domain_name" ]; then
     domain_name=$(hostname -d 2>/dev/null)
-fi
-
-if [ -z "$domain_name" ] && command -v dnsdomainname >/dev/null 2>&1; then
-    domain_name=$(dnsdomainname 2>/dev/null)
 fi
 
 if [ -z "$domain_name" ]; then
@@ -43,168 +38,86 @@ if [ -z "$domain_name" ]; then
 fi
 
 echo "Домен: $domain_name"
-
-echo
-echo "=== Информация о подключении к домену ==="
 echo
 
-if command -v realm >/dev/null 2>&1; then
-    realm list 2>/dev/null
+echo "=== Информация о домене ==="
+echo
 
-    if [ $? -ne 0 ]; then
-        echo "Не удалось получить информацию через realm."
-    fi
+if command -v samba-tool >/dev/null 2>&1; then
+    samba-tool domain info 127.0.0.1 2>/dev/null || echo "Не удалось получить информацию через samba-tool."
 else
-    echo "Команда realm не найдена."
-fi
-
-echo
-echo "=== Проверка SSSD ==="
-echo
-
-if command -v systemctl >/dev/null 2>&1; then
-    if systemctl list-unit-files 2>/dev/null | grep -q '^sssd\.service'; then
-        if systemctl is-active --quiet sssd; then
-            echo "Служба SSSD: работает"
-        else
-            echo "Служба SSSD: не работает"
-        fi
-    else
-        echo "Служба SSSD не найдена."
-    fi
-else
-    echo "systemctl не найден."
-fi
-
-if command -v sssctl >/dev/null 2>&1; then
-    echo
-    echo "Домены SSSD:"
-    sssctl domain-list 2>/dev/null
-fi
-
-echo
-echo "=== Проверка Samba/Winbind ==="
-echo
-
-if command -v net >/dev/null 2>&1; then
-    echo "Информация net ads:"
-    net ads info 2>/dev/null || echo "Не удалось получить net ads info."
-else
-    echo "Команда net не найдена."
+    echo "samba-tool не найден."
+    echo "Для вывода групп и пользователей домена нужен samba-tool."
+    echo "Проверка домена завершена."
+    exit 0
 fi
 
 echo
 echo "=== Машины, включенные в домен ==="
 echo
 
-machines_found=0
-
-if command -v samba-tool >/dev/null 2>&1; then
-    echo "Список машин через samba-tool:"
-    echo
-
-    samba-tool computer list 2>/dev/null
-
-    if [ $? -eq 0 ]; then
-        machines_found=1
+if samba-tool computer list >/tmp/domain_computers.txt 2>/dev/null; then
+    if [ -s /tmp/domain_computers.txt ]; then
+        cat /tmp/domain_computers.txt
     else
-        echo "Не удалось получить список машин через samba-tool."
+        echo "Машины в домене не найдены."
     fi
+else
+    echo "Не удалось получить список машин домена."
 fi
 
-if [ "$machines_found" -eq 0 ] && command -v ldapsearch >/dev/null 2>&1; then
-    echo "Список машин через ldapsearch:"
-    echo
-
-    ldap_base=$(echo "$domain_name" | awk -F. '{
-        for (i = 1; i <= NF; i++) {
-            if (i == 1) {
-                printf "DC=%s", $i
-            } else {
-                printf ",DC=%s", $i
-            }
-        }
-    }')
-
-    ldapsearch -LLL -Y GSSAPI -b "$ldap_base" "(&(objectClass=computer))" dNSHostName sAMAccountName 2>/dev/null | \
-    awk '
-        /^sAMAccountName:/ {
-            name=$0
-            sub(/^sAMAccountName:[[:space:]]*/, "", name)
-            print "Имя машины: " name
-        }
-
-        /^dNSHostName:/ {
-            dns=$0
-            sub(/^dNSHostName:[[:space:]]*/, "", dns)
-            print "DNS-имя: " dns
-            print ""
-        }
-    '
-
-    if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-        machines_found=1
-    else
-        echo "Не удалось получить список машин через ldapsearch."
-        echo "Возможно, нужен Kerberos-билет: kinit user@$domain_name"
-    fi
-fi
-
-if [ "$machines_found" -eq 0 ]; then
-    echo "Список машин домена получить не удалось."
-    echo "Нужен samba-tool или ldapsearch с правами на чтение каталога."
-fi
+rm -f /tmp/domain_computers.txt
 
 echo
-echo "=== Локальные пользовательские группы ==="
+echo "=== Группы домена и пользователи в группах ==="
 echo
 
-printf "%-30s %-10s %s\n" "Группа" "GID" "Пользователи"
-printf "%-30s %-10s %s\n" "------" "---" "------------"
+if samba-tool group list >/tmp/domain_groups.txt 2>/dev/null; then
+    if [ ! -s /tmp/domain_groups.txt ]; then
+        echo "Группы домена не найдены."
+    else
+        while IFS= read -r domain_group; do
+            [ -z "$domain_group" ] && continue
 
-while IFS=: read -r group_name password_field group_id group_members; do
-    if [ "$group_id" -ge 1000 ] && [ "$group_id" -lt 65534 ]; then
+            echo "----------------------------------------"
+            echo "Группа: $domain_group"
+            echo "Пользователи в группе:"
+            echo
 
-        users_in_group=""
-
-        if [ -n "$group_members" ]; then
-            users_in_group="$group_members"
-        fi
-
-        primary_users=$(awk -F: -v gid="$group_id" '
-            $4 == gid && $3 >= 1000 && $3 < 65534 {
-                print $1
-            }
-        ' /etc/passwd | paste -sd "," -)
-
-        if [ -n "$primary_users" ]; then
-            if [ -n "$users_in_group" ]; then
-                users_in_group="$users_in_group,$primary_users"
+            if samba-tool group listmembers "$domain_group" >/tmp/domain_group_members.txt 2>/dev/null; then
+                if [ -s /tmp/domain_group_members.txt ]; then
+                    cat /tmp/domain_group_members.txt
+                else
+                    echo "Пользователей нет."
+                fi
             else
-                users_in_group="$primary_users"
+                echo "Не удалось получить пользователей группы."
             fi
-        fi
 
-        if [ -z "$users_in_group" ]; then
-            users_in_group="нет пользователей"
-        fi
+            echo
 
-        printf "%-30s %-10s %s\n" "$group_name" "$group_id" "$users_in_group"
+        done < /tmp/domain_groups.txt
     fi
-done < /etc/group
+else
+    echo "Не удалось получить список групп домена."
+fi
+
+rm -f /tmp/domain_groups.txt /tmp/domain_group_members.txt
 
 echo
-echo "=== Локальные пользователи ==="
+echo "=== Пользователи домена ==="
 echo
 
-printf "%-25s %-10s %-10s %-30s %s\n" "Пользователь" "UID" "GID" "Домашний каталог" "Shell"
-printf "%-25s %-10s %-10s %-30s %s\n" "------------" "---" "---" "---------------" "-----"
+if samba-tool user list >/tmp/domain_users.txt 2>/dev/null; then
+    if [ -s /tmp/domain_users.txt ]; then
+        cat /tmp/domain_users.txt
+    else
+        echo "Пользователи домена не найдены."
+    fi
+else
+    echo "Не удалось получить список пользователей домена."
+fi
 
-awk -F: '
-$3 >= 1000 && $3 < 65534 {
-    printf "%-25s %-10s %-10s %-30s %s\n", $1, $3, $4, $6, $7
-}
-' /etc/passwd
+rm -f /tmp/domain_users.txt
 
 echo
-echo "Проверка домена завершена."
